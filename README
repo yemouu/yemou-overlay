@@ -1,8 +1,10 @@
 # haiku
-Slow, slow, slow ebuilds
-Countless outdated software
+Random ebuilds for
+Wacky experiments and
 Updated ebuilds
 
 # info
-Ebuilds here are usually just bumped from a previous version. These ebuilds have most likely been
-held back for a reason. Use are your own risk.
+Some ebuilds here are just bumped from a previous version in ::gentoo. These ebuilds have most
+likely been held back for a reason. Use are your own risk.
+
+Other ebuilds are here for trying new things. Like trying to replace elogind with seatd and basu.
