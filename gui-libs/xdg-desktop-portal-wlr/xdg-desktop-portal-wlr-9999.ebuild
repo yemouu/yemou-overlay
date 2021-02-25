@@ -1,4 +1,4 @@
-# Copyright 1999-2020 Gentoo Authors
+# Copyright 1999-2021 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=7
@@ -12,19 +12,20 @@ if [[ ${PV} == 9999 ]]; then
 	EGIT_REPO_URI="https://github.com/emersion/${PN}.git"
 	inherit git-r3
 else
-	SRC_URI="https://github.com/emersion/${PN}/archive/v${PV}.tar.gz -> ${P}.tar.gz"
+	SRC_URI="https://github.com/emersion/${PN}/archive/${PV}.tar.gz -> ${P}.tar.gz"
 	KEYWORDS="~amd64"
 fi
 
 LICENSE="MIT"
-SLOT="0"
-IUSE="elogind systemd"
-REQUIRED_USE="?? ( elogind systemd )"
+SLOT="0/9999"
+IUSE="basu elogind systemd"
+REQUIRED_USE="^^ ( basu elogind systemd )"
 
 DEPEND="
 	>=media-video/pipewire-0.2.9:=
 	dev-libs/wayland
 	>=dev-libs/wayland-protocols-1.14:=
+	basu? ( sys-libs/basu )
 	elogind? ( >=sys-auth/elogind-237 )
 	systemd? ( >=sys-apps/systemd-237 )
 "
@@ -40,14 +41,14 @@ BDEPEND="
 "
 
 src_configure() {
+	use basu && sdbus=basu
+	use elogind && sdbus=libelogind
+	use systemd && sdbus=libsystemd
+
 	local emesonargs=(
 		"-Dwerror=false"
+		-Dsd-bus-provider=$sdbus
 	)
-	if use systemd; then
-		emesonargs+=("-DHAVE_SYSTEMD=1")
-	else
-		emesonargs+=("-DHAVE_ELOGIND=1")
-	fi
 
 	meson_src_configure
 }

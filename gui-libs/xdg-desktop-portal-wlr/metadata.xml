@@ -4,4 +4,7 @@
   <maintainer type="person">
     <email>meeyou@tuta.io</email>
   </maintainer>
+  <use>
+    <flag name="basu">Use sd-bus library from basu</flag>
+  </use>
 </pkgmetadata>
