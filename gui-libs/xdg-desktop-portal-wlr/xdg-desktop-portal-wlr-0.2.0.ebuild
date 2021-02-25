@@ -17,7 +17,7 @@ else
 fi
 
 LICENSE="MIT"
-SLOT="0/9999"
+SLOT="0"
 IUSE="basu elogind systemd"
 REQUIRED_USE="^^ ( basu elogind systemd )"
 
