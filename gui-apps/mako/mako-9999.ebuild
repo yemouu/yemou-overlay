@@ -44,9 +44,9 @@ BDEPEND="
 "
 
 src_configure() {
-	usex basu && sd_bus=basu
-	usex elogind && sd_bus=libelogind
-	usex systemd && sd_bus=libsystemd
+	use basu && sd_bus=basu
+	use elogind && sd_bus=libelogind
+	use systemd && sd_bus=libsystemd
 
 	local emesonargs=(
 		-Dicons=$(usex icons enabled disabled)
