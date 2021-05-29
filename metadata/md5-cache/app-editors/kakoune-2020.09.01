@@ -9,4 +9,4 @@ LICENSE=Unlicense
 RDEPEND=sys-libs/ncurses:0=[unicode]
 SLOT=0
 SRC_URI=https://github.com/mawww/kakoune/archive/v2020.09.01.tar.gz
-_md5_=3ff5337d650a81ac489d517fe415c1dc
+_md5_=13bfa72bb6140c5045d461862aa80d15
