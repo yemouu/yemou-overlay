@@ -1,0 +1,83 @@
+From a0c23ccb720cb10469c4dfd77342524d6f607a9c Mon Sep 17 00:00:00 2001
+From: Maxime Coste <mawww@kakoune.org>
+Date: Sun, 3 Jan 2021 10:58:09 +1100
+Subject: [PATCH] Add missing limits includes
+
+Fixes #4003
+---
+ src/file.cc          | 1 +
+ src/highlighters.cc  | 1 +
+ src/input_handler.cc | 5 +++--
+ src/regex_impl.cc    | 1 +
+ src/selection.hh     | 2 ++
+ 5 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/src/file.cc b/src/file.cc
+index ce6f8405a3..7ad6f48d33 100644
+--- a/src/file.cc
++++ b/src/file.cc
+@@ -10,6 +10,7 @@
+ #include "string.hh"
+ #include "unicode.hh"
+ 
++#include <limits>
+ #include <cerrno>
+ #include <cstdlib>
+ #include <cstdio>
+diff --git a/src/highlighters.cc b/src/highlighters.cc
+index 309ade94a3..47278cd028 100644
+--- a/src/highlighters.cc
++++ b/src/highlighters.cc
+@@ -20,6 +20,7 @@
+ #include "window.hh"
+ 
+ #include <cstdio>
++#include <limits>
+ 
+ namespace Kakoune
+ {
+diff --git a/src/input_handler.cc b/src/input_handler.cc
+index b75efd94ab..a287b2dbfa 100644
+--- a/src/input_handler.cc
++++ b/src/input_handler.cc
+@@ -1,5 +1,3 @@
+-#include <utility>
+-
+ #include "input_handler.hh"
+ 
+ #include "buffer_manager.hh"
+@@ -19,6 +17,9 @@
+ #include "window.hh"
+ #include "word_db.hh"
+ 
++#include <utility>
++#include <limits>
++
+ namespace Kakoune
+ {
+ 
+diff --git a/src/regex_impl.cc b/src/regex_impl.cc
+index a4457bcc4b..c5d755ace3 100644
+--- a/src/regex_impl.cc
++++ b/src/regex_impl.cc
+@@ -12,6 +12,7 @@
+ 
+ #include <cstdio>
+ #include <cstring>
++#include <limits>
+ 
+ namespace Kakoune
+ {
+diff --git a/src/selection.hh b/src/selection.hh
+index 28eca5f27d..c880aaf7a4 100644
+--- a/src/selection.hh
++++ b/src/selection.hh
+@@ -3,6 +3,8 @@
+ 
+ #include "buffer.hh"
+ 
++#include <limits>
++
+ namespace Kakoune
+ {
+ 

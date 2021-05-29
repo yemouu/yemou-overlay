@@ -15,7 +15,10 @@ DEPEND="sys-libs/ncurses:0=[unicode]"
 RDEPEND="${DEPEND}"
 BDEPEND="virtual/pkgconfig"
 
-PATCHES=( "${FILESDIR}"/kakoune-2020.01.16-enable-ebuild-syntax-highlight.patch )
+PATCHES=(
+	"${FILESDIR}"/kakoune-2020.01.16-enable-ebuild-syntax-highlight.patch
+	"${FILESDIR}"/kakoune-2020.09.01-missing-includes.patch
+)
 
 src_prepare(){
 	default
