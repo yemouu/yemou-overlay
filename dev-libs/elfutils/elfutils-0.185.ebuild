@@ -52,7 +52,6 @@ src_prepare() {
 
 	if ! use utils
 	then
-		#rm -r src/* || die
 		sed -i '/src\//d' configure.ac || die
 	fi
 
