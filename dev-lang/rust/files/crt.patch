@@ -1,0 +1,180 @@
+From 61c1155d170292179568dce747afd9b8f91cc265 Mon Sep 17 00:00:00 2001
+From: 12101111 <w12101111@gmail.com>
+Date: Mon, 17 May 2021 11:22:07 +0800
+Subject: [PATCH] Build crtbengin.o/crtend.o from source code
+
+---
+ src/bootstrap/builder.rs                      |  3 +-
+ src/bootstrap/compile.rs                      |  3 +-
+ src/bootstrap/native.rs                       | 66 +++++++++++++++++++
+ .../host-x86_64/dist-various-1/Dockerfile     |  6 +-
+ .../run-make-fulldeps/issue-47551/Makefile    |  9 +++
+ .../issue-47551/eh_frame-terminator.rs        | 23 +++++++
+ 6 files changed, 107 insertions(+), 3 deletions(-)
+ create mode 100644 src/test/run-make-fulldeps/issue-47551/Makefile
+ create mode 100644 src/test/run-make-fulldeps/issue-47551/eh_frame-terminator.rs
+
+diff --git a/src/bootstrap/builder.rs b/src/bootstrap/builder.rs
+index f39e89a9d01f7..f3049a747579a 100644
+--- a/src/bootstrap/builder.rs
++++ b/src/bootstrap/builder.rs
+@@ -369,7 +369,8 @@ impl<'a> Builder<'a> {
+                 tool::Rustfmt,
+                 tool::Miri,
+                 tool::CargoMiri,
+-                native::Lld
++                native::Lld,
++                native::CrtBeginEnd
+             ),
+             Kind::Check | Kind::Clippy { .. } | Kind::Fix | Kind::Format => describe!(
+                 check::Std,
+diff --git a/src/bootstrap/compile.rs b/src/bootstrap/compile.rs
+index 2676b3bf8e005..e5258d08956f6 100644
+--- a/src/bootstrap/compile.rs
++++ b/src/bootstrap/compile.rs
+@@ -199,8 +199,9 @@ fn copy_self_contained_objects(
+                 DependencyType::TargetSelfContained,
+             );
+         }
++        let crt_path = builder.ensure(native::CrtBeginEnd { target });
+         for &obj in &["crtbegin.o", "crtbeginS.o", "crtend.o", "crtendS.o"] {
+-            let src = compiler_file(builder, builder.cc(target), target, obj);
++            let src = crt_path.join(obj);
+             let target = libdir_self_contained.join(obj);
+             builder.copy(&src, &target);
+             target_deps.push((target, DependencyType::TargetSelfContained));
+diff --git a/src/bootstrap/native.rs b/src/bootstrap/native.rs
+index bde0a96f03013..156e8dd53d50d 100644
+--- a/src/bootstrap/native.rs
++++ b/src/bootstrap/native.rs
+@@ -858,3 +858,69 @@ impl HashStamp {
+         fs::write(&self.path, self.hash.as_deref().unwrap_or(b""))
+     }
+ }
++
++#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
++pub struct CrtBeginEnd {
++    pub target: TargetSelection,
++}
++
++impl Step for CrtBeginEnd {
++    type Output = PathBuf;
++
++    fn should_run(run: ShouldRun<'_>) -> ShouldRun<'_> {
++        run.path("src/llvm-project/compiler-rt/lib/crt")
++    }
++
++    fn make_run(run: RunConfig<'_>) {
++        run.builder.ensure(CrtBeginEnd { target: run.target });
++    }
++
++    /// Build crtbegin.o/crtend.o for musl target.
++    fn run(self, builder: &Builder<'_>) -> Self::Output {
++        let out_dir = builder.native_dir(self.target).join("crt");
++
++        if builder.config.dry_run {
++            return out_dir;
++        }
++
++        let crtbegin_src = builder.src.join("src/llvm-project/compiler-rt/lib/crt/crtbegin.c");
++        let crtend_src = builder.src.join("src/llvm-project/compiler-rt/lib/crt/crtend.c");
++        if up_to_date(&crtbegin_src, &out_dir.join("crtbegin.o"))
++            && up_to_date(&crtend_src, &out_dir.join("crtendS.o"))
++        {
++            return out_dir;
++        }
++
++        builder.info("Building crtbegin.o and crtend.o");
++        t!(fs::create_dir_all(&out_dir));
++
++        let mut cfg = cc::Build::new();
++
++        if let Some(ar) = builder.ar(self.target) {
++            cfg.archiver(ar);
++        }
++        cfg.compiler(builder.cc(self.target));
++        cfg.cargo_metadata(false)
++            .out_dir(&out_dir)
++            .target(&self.target.triple)
++            .host(&builder.config.build.triple)
++            .warnings(false)
++            .debug(false)
++            .opt_level(3)
++            .file(crtbegin_src)
++            .file(crtend_src);
++
++        // Those flags are defined in src/llvm-project/compiler-rt/lib/crt/CMakeLists.txt
++        // Currently only consumer of those objects is musl, which use .init_array/.fini_array
++        // instead of .ctors/.dtors
++        cfg.flag("-std=c11")
++            .define("CRT_HAS_INITFINI_ARRAY", None)
++            .define("EH_USE_FRAME_REGISTRY", None);
++
++        cfg.compile("crt");
++
++        t!(fs::copy(out_dir.join("crtbegin.o"), out_dir.join("crtbeginS.o")));
++        t!(fs::copy(out_dir.join("crtend.o"), out_dir.join("crtendS.o")));
++        out_dir
++    }
++}
+diff --git a/src/ci/docker/host-x86_64/dist-various-1/Dockerfile b/src/ci/docker/host-x86_64/dist-various-1/Dockerfile
+index 1f8f9fc518ac1..cd0f01faa1bfa 100644
+--- a/src/ci/docker/host-x86_64/dist-various-1/Dockerfile
++++ b/src/ci/docker/host-x86_64/dist-various-1/Dockerfile
+@@ -144,7 +144,11 @@ ENV TARGETS=$TARGETS,armv7a-none-eabi
+ # riscv targets currently do not need a C compiler, as compiler_builtins
+ # doesn't currently have it enabled, and the riscv gcc compiler is not
+ # installed.
+-ENV CC_mipsel_unknown_linux_musl=mipsel-openwrt-linux-gcc \
++ENV CFLAGS_armv5te_unknown_linux_musleabi="-march=armv5te -marm -mfloat-abi=soft" \
++    CFLAGS_arm_unknown_linux_musleabi="-march=armv6 -marm" \
++    CFLAGS_arm_unknown_linux_musleabihf="-march=armv6 -marm -mfpu=vfp" \
++    CFLAGS_armv7_unknown_linux_musleabihf="-march=armv7-a" \
++    CC_mipsel_unknown_linux_musl=mipsel-openwrt-linux-gcc \
+     CC_mips_unknown_linux_musl=mips-openwrt-linux-gcc \
+     CC_mips64el_unknown_linux_muslabi64=mips64el-linux-gnuabi64-gcc \
+     CC_mips64_unknown_linux_muslabi64=mips64-linux-gnuabi64-gcc \
+diff --git a/src/test/run-make-fulldeps/issue-47551/Makefile b/src/test/run-make-fulldeps/issue-47551/Makefile
+new file mode 100644
+index 0000000000000..f4495e6b671d7
+--- /dev/null
++++ b/src/test/run-make-fulldeps/issue-47551/Makefile
+@@ -0,0 +1,9 @@
++# only-linux
++# ignore-32bit
++
++-include ../tools.mk
++
++all:
++	$(RUSTC) eh_frame-terminator.rs
++	$(call RUN,eh_frame-terminator) | $(CGREP) '1122334455667788'
++	objdump --dwarf=frames $(TMPDIR)/eh_frame-terminator | $(CGREP) 'ZERO terminator'
+diff --git a/src/test/run-make-fulldeps/issue-47551/eh_frame-terminator.rs b/src/test/run-make-fulldeps/issue-47551/eh_frame-terminator.rs
+new file mode 100644
+index 0000000000000..2f740dc4fac38
+--- /dev/null
++++ b/src/test/run-make-fulldeps/issue-47551/eh_frame-terminator.rs
+@@ -0,0 +1,23 @@
++// run-pass
++
++#![feature(backtrace)]
++#[derive(Clone, Copy)]
++struct Foo {
++    array: [u64; 10240],
++}
++
++impl Foo {
++    const fn new() -> Self {
++        Self {
++            array: [0x1122_3344_5566_7788; 10240]
++        }
++    }
++}
++
++static BAR: [Foo; 10240] = [Foo::new(); 10240];
++
++fn main() {
++    let bt = std::backtrace::Backtrace::force_capture();
++    println!("Hello, world! {:?}", bt);
++    println!("{:x}", BAR[0].array[0]);
++}
