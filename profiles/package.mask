@@ -1,0 +1,2 @@
+# There are most likely repos that handle rust for musl + clang systems better
+dev-lang/rust
