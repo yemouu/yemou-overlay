@@ -130,6 +130,9 @@ multilib_src_install() {
 		insinto /usr/lib/pkgconfig
 		doins config/libdw.pc
 		doins config/libelf.pc
+
+		insinto /usr/include/elfutils
+		doins version.h
 	fi
 }
 
