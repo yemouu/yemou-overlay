@@ -5,13 +5,13 @@ EAPI=7
 
 DESCRIPTION="Modal editor inspired by vim"
 HOMEPAGE="http://kakoune.org"
-SRC_URI="https://github.com/mawww/${PN}/archive/v${PV}.tar.gz"
+SRC_URI="https://github.com/mawww/${PN}/releases/download/v${PV}/${P}.tar.bz2"
 
 LICENSE="Unlicense"
 SLOT="0"
 KEYWORDS="~amd64"
 
-DEPEND="sys-libs/ncurses:0=[unicode]"
+DEPEND="sys-libs/ncurses:0=[unicode(+)]"
 RDEPEND="${DEPEND}"
 BDEPEND="virtual/pkgconfig"
 
@@ -37,7 +37,4 @@ src_test() {
 
 src_install() {
 	emake PREFIX="${D}"/usr docdir="${D}/usr/share/doc/${PF}" gzip_man="no" install
-
-	#rm "${D}/usr/share/man/man1/kak.1.gz" || die
-	#doman doc/kak.1
 }
