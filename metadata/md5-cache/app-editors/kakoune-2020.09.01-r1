@@ -1,0 +1,12 @@
+BDEPEND=virtual/pkgconfig
+DEFINED_PHASES=compile install prepare test
+DEPEND=sys-libs/ncurses:0=[unicode(+)]
+DESCRIPTION=Modal editor inspired by vim
+EAPI=7
+HOMEPAGE=http://kakoune.org
+KEYWORDS=~amd64
+LICENSE=Unlicense
+RDEPEND=sys-libs/ncurses:0=[unicode(+)]
+SLOT=0
+SRC_URI=https://github.com/mawww/kakoune/releases/download/v2020.09.01/kakoune-2020.09.01.tar.bz2
+_md5_=b5f68c26d0f2e6a12c252d4d923b9f23
