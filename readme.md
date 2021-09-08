@@ -1,6 +1,8 @@
 # haiku
 Random ebuilds for
+
 Wacky experiments and
+
 Updated ebuilds
 
 # info
@@ -11,9 +13,10 @@ Other ebuilds are here for trying new things.
 
 # how to use
 Run the following commands (the first one can be skipped if eselect-repository is already installed):
+```sh
+emerge -an app-eselect/eselect-repository
 
-	emerge -an app-eselect/eselect-repository
+eselect repository add yemou-overlay git https://gitlab.com/yemou/yemou-overlay
 
-	eselect repository add yemou-overlay git https://github.com/yemouu/yemou-overlay
-
-	emaint sync -r yemou-overlay
+emaint sync -r yemou-overlay
+```
