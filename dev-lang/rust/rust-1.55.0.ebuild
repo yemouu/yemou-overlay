@@ -106,8 +106,8 @@ DEPEND="
 	sys-libs/zlib:=
 	dev-libs/openssl:0=
 	elibc_musl? (
-		llvm-libunwind? ( sys-libs/llvm-libunwind:= )
 		!llvm-libunwind? ( sys-libs/libunwind:= )
+		llvm-libunwind? ( sys-libs/llvm-libunwind:= )
 	)
 	system-llvm? ( ${LLVM_DEPEND} )
 	libcxx? ( sys-libs/libcxx:= )
@@ -122,6 +122,7 @@ RDEPEND="${DEPEND}
 
 REQUIRED_USE="|| ( ${ALL_LLVM_TARGETS[*]} )
 	libcxx? ( system-llvm )
+	llvm-libunwind? ( system-llvm )
 	miri? ( nightly )
 	parallel-compiler? ( nightly )
 	test? ( ${ALL_LLVM_TARGETS[*]} )
@@ -148,14 +149,12 @@ QA_SONAME="
 # causes double bootstrap
 RESTRICT="test"
 
-VERIFY_SIG_OPENPGP_KEY_PATH="/usr/share/openpgp-keys/rust.asc"
+VERIFY_SIG_OPENPGP_KEY_PATH=${BROOT}/usr/share/openpgp-keys/rust.asc
 
 PATCHES=(
-	"${FILESDIR}"/1.47.0-ignore-broken-and-non-applicable-tests.patch
+	"${FILESDIR}"/1.55.0-ignore-broken-and-non-applicable-tests.patch
 	"${FILESDIR}"/1.49.0-gentoo-musl-target-specs.patch
-	"${FILESDIR}"/1.53.0-rustversion-1.0.5.patch # https://github.com/rust-lang/rust/pull/86425
-	"${FILESDIR}"/1.53.0-miri-vergen.patch # https://github.com/rust-lang/rust/issues/84182
-	"${FILESDIR}"/llvm-libunwind.patch
+	"${FILESDIR}"/1.54.0-parallel-miri.patch # https://github.com/rust-lang/miri/pull/1863
 )
 
 S="${WORKDIR}/${MY_P}-src"
@@ -189,7 +188,7 @@ bootstrap_rust_version_check() {
 }
 
 pre_build_checks() {
-	local M=8192
+	local M=4096
 	# multiply requirements by 1.5 if we are doing x86-multilib
 	if use amd64; then
 		M=$(( $(usex abi_x86_32 15 10) * ${M} / 10 ))
@@ -231,10 +230,6 @@ pkg_setup() {
 	python-any-r1_pkg_setup
 
 	export LIBGIT2_NO_PKG_CONFIG=1 #749381
-	# needed to build gentoo's musl target and the normal musl target
-	PKG_CONFIG_ALLOW_CROSS=1
-
-	export LIBGIT2_NO_PKG_CONFIG PKG_CONFIG_ALLOW_CROSS
 
 	use system-bootstrap && bootstrap_rust_version_check
 
@@ -260,16 +255,16 @@ src_prepare() {
 }
 
 src_configure() {
-	if use elibc_musl
-	then local rust_target="" rust_targets="\"$CHOST\"" arch_cflags
-	else local rust_target="" rust_targets="" arch_cflags
+	if ! use elibc_musl
+	then local rust_target="" rust_targets="" arch_cflags
+	else local rust_target="" rust_targets="\"$CHOST\"" arch_cflags
 	fi
 
 	# Collect rust target names to compile standard libs for all ABIs.
 	for v in $(multilib_get_enabled_abi_pairs); do
-		if use elibc_musl
-		then rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}) | sed s/gnu/musl/)\""
-		else rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
+		if ! use elibc_musl
+		then rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
+		else rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##(.}) | sed s/gnu/musl/)\""
 		fi
 	done
 	if use wasm; then
@@ -277,7 +272,7 @@ src_configure() {
 		if use system-llvm; then
 			# un-hardcode rust-lld linker for this target
 			# https://bugs.gentoo.org/715348
-			sed -i '/linker:/ s/rust-lld/wasm-ld/' compiler/rustc_target/src/spec/wasm32_base.rs || die
+			sed -i '/linker:/ s/rust-lld/wasm-ld/' compiler/rustc_target/src/spec/wasm_base.rs || die
 		fi
 	fi
 	rust_targets="${rust_targets#,}"
@@ -307,9 +302,9 @@ src_configure() {
 	# in case of prefix it will be already prefixed, as --print sysroot returns full path
 	[[ -d ${rust_stage0_root} ]] || die "${rust_stage0_root} is not a directory"
 
-	if use elibc_musl
-	then rust_target="$CHOST"
-	else rust_target="$(rust_abi)"
+	if ! use elibc_musl
+	then rust_target="$(rust_abi)"
+	else rust_target="$CHOST"
 	fi
 
 	cat <<- _EOF_ > "${S}"/config.toml
@@ -384,23 +379,22 @@ src_configure() {
 		deny-warnings = $(usex wasm $(usex doc false true) true)
 		backtrace-on-ice = true
 		jemalloc = false
-		llvm-libunwind = "$(usex llvm-libunwind in-tree no)"
+		llvm-libunwind = "$(usex llvm-libunwind system no)"
 	_EOF_
-
 	if use elibc_musl; then
-		cat <<- _EOF_ >> "${S}"/config.toml
+		cat <<- _EOF_ >> "${S}/config.toml"
 			musl-root = "/usr"
 		_EOF_
 	fi
 
-	cat <<- _EOF_ >> "${S}"/config.toml
+	cat <<- _EOF_ >> "${S}/config.toml"
 		[dist]
 		src-tarball = false
 		compression-formats = ["gz"]
 	_EOF_
 
 	if use elibc_musl; then
-		cat <<- _EOF_ >> "${S}"/config.toml
+		cat <<- _EOF_ >> "${S}/config.toml"
 			[target.${rust_target}]
 			cc = "$(tc-getBUILD_CC)"
 			cxx = "$(tc-getBUILD_CXX)"
@@ -410,7 +404,7 @@ src_configure() {
 		_EOF_
 
 		if use system-llvm; then
-			cat <<- _EOF_ >> "${S}"/config.toml
+			cat <<- _EOF_ >> "${S}/config.toml"
 				llvm-config = "$(get_llvm_prefix "${LLVM_MAX_SLOT}")/bin/llvm-config"
 			_EOF_
 		fi
