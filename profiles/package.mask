@@ -1,5 +1,0 @@
-# yemou <meeyou@tuta.io> (2021-06-19)
-# Ebuild for a musl + clang install. Should work
-# on a traditional Gentoo install but you should
-# just use the offical repos then.
-dev-lang/rust
