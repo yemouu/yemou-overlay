@@ -1,16 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
 <pkgmetadata>
 	<maintainer type="person">
-		<email>meeyou@tuta.io</email>
+		<email>yemou@tuta.io</email>
 	</maintainer>
 	<use>
 		<flag name="clippy">Install clippy, Rust code linter</flag>
-		<flag name="libcxx">Use libcxx instead of libstdc++</flag>
+		<flag name="libcxx">Build using libc++</flag>
 		<flag name="miri">Install miri, an interpreter for Rust's mid-level intermediate representation (requires USE=nightly)</flag>
 		<flag name="nightly">Enable nightly (UNSTABLE) features</flag>
-		<flag name="parallel-compiler">Build a multi-threaded rustc</flag>
+		<flag name="parallel-compiler">Build a multi-threaded rustc (experimental, not tested by upstream)</flag>
 		<flag name="rls">Install rls, Rust Language Server (used with IDEs supporting RLS protocol)</flag>
+		<flag name="rust-src">Install rust-src, needed by developer tools and for build-std (cross)</flag>
 		<flag name="rustfmt">Install rustfmt, Rust code formatter</flag>
 		<flag name="system-bootstrap">Bootstrap using installed rust compiler</flag>
 		<flag name="system-llvm">Use the system LLVM install</flag>

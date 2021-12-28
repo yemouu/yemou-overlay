@@ -3,10 +3,10 @@
 
 EAPI=7
 
-PYTHON_COMPAT=( python3_{7..9} )
+PYTHON_COMPAT=( python3_{7..10} )
 
 inherit bash-completion-r1 check-reqs estack flag-o-matic llvm multiprocessing \
-	multilib-build python-any-r1 rust-toolchain toolchain-funcs verify-sig
+	multilib multilib-build python-any-r1 rust-toolchain toolchain-funcs verify-sig
 
 if [[ ${PV} = *beta* ]]; then
 	betaver=${PV//*beta}
@@ -41,7 +41,7 @@ LLVM_TARGET_USEDEPS=${ALL_LLVM_TARGETS[@]/%/(-)?}
 
 LICENSE="|| ( MIT Apache-2.0 ) BSD-1 BSD-2 BSD-4 UoI-NCSA"
 
-IUSE="clippy cpu_flags_x86_sse2 debug doc libcxx llvm-libunwind miri nightly parallel-compiler rls rustfmt system-bootstrap system-llvm test wasm ${ALL_LLVM_TARGETS[*]}"
+IUSE="clippy cpu_flags_x86_sse2 debug doc libcxx llvm-libunwind miri nightly parallel-compiler rls rustfmt rust-src system-bootstrap system-llvm test wasm ${ALL_LLVM_TARGETS[*]}"
 
 # Please keep the LLVM dependency block separate. Since LLVM is slotted,
 # we need to *really* make sure we're not pulling more than one slot
@@ -49,7 +49,7 @@ IUSE="clippy cpu_flags_x86_sse2 debug doc libcxx llvm-libunwind miri nightly par
 
 # How to use it:
 # List all the working slots in LLVM_VALID_SLOTS, newest first.
-LLVM_VALID_SLOTS=( 12 )
+LLVM_VALID_SLOTS=( 13 )
 LLVM_MAX_SLOT="${LLVM_VALID_SLOTS[0]}"
 
 # splitting usedeps needed to avoid CI/pkgcheck's UncheckableDep limitation
@@ -97,7 +97,7 @@ BDEPEND="${PYTHON_DEPS}
 		dev-util/ninja
 	)
 	test? ( sys-devel/gdb )
-	verify-sig? ( app-crypt/openpgp-keys-rust )
+	verify-sig? ( sec-keys/openpgp-keys-rust )
 "
 
 DEPEND="
@@ -125,6 +125,7 @@ REQUIRED_USE="|| ( ${ALL_LLVM_TARGETS[*]} )
 	llvm-libunwind? ( system-llvm )
 	miri? ( nightly )
 	parallel-compiler? ( nightly )
+	rls? ( rust-src )
 	test? ( ${ALL_LLVM_TARGETS[*]} )
 	wasm? ( llvm_targets_WebAssembly )
 	x86? ( cpu_flags_x86_sse2 )
@@ -146,15 +147,19 @@ QA_SONAME="
 	usr/lib/${PN}/${PV}/lib/rustlib/.*/lib/lib.*.so
 "
 
+# An rmeta file is custom binary format that contains the metadata for the crate.
+# rmeta files do not support linking, since they do not contain compiled object files.
+# so we can safely silence the warning for this QA check.
+QA_EXECSTACK="usr/lib/${PN}/${PV}/lib/rustlib/*/lib*.rlib:lib.rmeta"
+
 # causes double bootstrap
 RESTRICT="test"
 
 VERIFY_SIG_OPENPGP_KEY_PATH=${BROOT}/usr/share/openpgp-keys/rust.asc
 
 PATCHES=(
-	"${FILESDIR}"/1.47.0-ignore-broken-and-non-applicable-tests.patch
-	"${FILESDIR}"/1.49.0-gentoo-musl-target-specs.patch
-	"${FILESDIR}"/1.53.0-rustversion-1.0.5.patch # https://github.com/rust-lang/rust/pull/86425
+	"${FILESDIR}"/1.55.0-ignore-broken-and-non-applicable-tests.patch
+	"${FILESDIR}"/1.56.1-musl-dynamic-linking.patch
 )
 
 S="${WORKDIR}/${MY_P}-src"
@@ -255,17 +260,11 @@ src_prepare() {
 }
 
 src_configure() {
-	if ! use elibc_musl
-	then local rust_target="" rust_targets="" arch_cflags
-	else local rust_target="" rust_targets="\"$CHOST\"" arch_cflags
-	fi
+	local rust_target="" rust_targets="" arch_cflags
 
 	# Collect rust target names to compile standard libs for all ABIs.
 	for v in $(multilib_get_enabled_abi_pairs); do
-		if ! use elibc_musl
-		then rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
-		else rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##(.}) | sed s/gnu/musl/)\""
-		fi
+		rust_targets="${rust_targets},\"$(rust_abi $(get_abi_CHOST ${v##*.}))\""
 	done
 	if use wasm; then
 		rust_targets="${rust_targets},\"wasm32-unknown-unknown\""
@@ -285,10 +284,13 @@ src_configure() {
 		tools="\"miri\",$tools"
 	fi
 	if use rls; then
-		tools="\"rls\",\"analysis\",\"src\",$tools"
+		tools="\"rls\",\"analysis\",$tools"
 	fi
 	if use rustfmt; then
 		tools="\"rustfmt\",$tools"
+	fi
+	if use rust-src; then
+		tools="\"src\",$tools"
 	fi
 
 	local rust_stage0_root
@@ -302,10 +304,7 @@ src_configure() {
 	# in case of prefix it will be already prefixed, as --print sysroot returns full path
 	[[ -d ${rust_stage0_root} ]] || die "${rust_stage0_root} is not a directory"
 
-	if ! use elibc_musl
-	then rust_target="$(rust_abi)"
-	else rust_target="$CHOST"
-	fi
+	rust_target="$(rust_abi)"
 
 	cat <<- _EOF_ > "${S}"/config.toml
 		changelog-seen = 2
@@ -380,35 +379,10 @@ src_configure() {
 		backtrace-on-ice = true
 		jemalloc = false
 		llvm-libunwind = "$(usex llvm-libunwind system no)"
-	_EOF_
-	if use elibc_musl; then
-		cat <<- _EOF_ >> "${S}/config.toml"
-			musl-root = "/usr"
-		_EOF_
-	fi
-
-	cat <<- _EOF_ >> "${S}/config.toml"
 		[dist]
 		src-tarball = false
 		compression-formats = ["gz"]
 	_EOF_
-
-	if use elibc_musl; then
-		cat <<- _EOF_ >> "${S}/config.toml"
-			[target.${rust_target}]
-			cc = "$(tc-getBUILD_CC)"
-			cxx = "$(tc-getBUILD_CXX)"
-			linker = "$(tc-getCC)"
-			ar = "$(tc-getAR)"
-			crt-static = false
-		_EOF_
-
-		if use system-llvm; then
-			cat <<- _EOF_ >> "${S}/config.toml"
-				llvm-config = "$(get_llvm_prefix "${LLVM_MAX_SLOT}")/bin/llvm-config"
-			_EOF_
-		fi
-	fi
 
 	for v in $(multilib_get_enabled_abi_pairs); do
 		rust_target=$(rust_abi $(get_abi_CHOST ${v##*.}))
